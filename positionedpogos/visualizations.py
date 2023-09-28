@@ -90,13 +90,16 @@ def visualize_sim(closed_loop_system):
     flight_axis.set_ylim(np.min(state[:, 1]) - 0.5, np.max(state[:, 1]) + 0.5)
         
     bar_length = 0.25
-    quadcopter_bar, = flight_axis.plot([], [], 'b-', lw=3)
-    u1_arrow, = flight_axis.plot([], [], 'r-', lw=2) 
-    u2_arrow, = flight_axis.plot([], [], 'r-', lw=2)
+    quadcopter_bar, = flight_axis.plot([], [], 'b-', lw=3, label="")
+    u1_arrow, = flight_axis.plot([], [], 'r-', lw=2, label="") 
+    u2_arrow, = flight_axis.plot([], [], 'r-', lw=2, label="")
+    setpoint = flight_axis.scatter(0, 0, s=100, c=[[0, 1, 0]], label="Setpoint")
+
     
     # Set axis equal
     flight_axis.set_aspect('equal') 
     flight_axis.grid()
+    flight_axis.legend() 
     
     # Setup thrust figure 
     thrust_axis = thrust_figure.subplots(1, 2)
@@ -124,7 +127,7 @@ def visualize_sim(closed_loop_system):
         quadcopter_bar.set_data([], [])
         u1_arrow.set_data([], [])
         u2_arrow.set_data([], [])
-        return quadcopter_bar, u1_arrow, u2_arrow,
+        return quadcopter_bar, u1_arrow, u2_arrow, setpoint,
     
     def quadcopter_update(frame): 
         x = state[frame, 0]
@@ -132,13 +135,14 @@ def visualize_sim(closed_loop_system):
         theta = state[frame, 2]
         current_thrust = thrust[frame]
         
+        # Update setpoint
+        setpoint.set_offsets([setpoint_vector[frame, 0], setpoint_vector[frame, 1]])
+        
         # Compute the coordinates of the bar endpoints
         x_start = x - (bar_length / 2.0) * np.cos(theta)
         y_start = y - (bar_length / 2.0) * np.sin(theta)
         x_end = x + (bar_length / 2.0) * np.cos(theta)
         y_end = y + (bar_length / 2.0) * np.sin(theta)
-        
-        # Compute the coordinates of the u arrow endpoints 
         
         # Starting points
         u1_arrow_x_start = x_end
@@ -157,7 +161,7 @@ def visualize_sim(closed_loop_system):
         quadcopter_bar.set_data([x_start, x_end], [y_start, y_end])
         u1_arrow.set_data([u1_arrow_x_start, u1_arrow_x_end], [u1_arrow_y_start, u1_arrow_y_end])
         u2_arrow.set_data([u2_arrow_x_start, u2_arrow_x_end], [u2_arrow_y_start, u2_arrow_y_end])
-        return quadcopter_bar, u1_arrow, u2_arrow,
+        return quadcopter_bar, u1_arrow, u2_arrow, setpoint,
     
     def six_dof_init(): 
         for i, trace in enumerate(six_dof_traces): 

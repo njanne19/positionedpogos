@@ -1,6 +1,6 @@
 import math 
 import numpy as np 
-from pydrake.systems.framework import System, DiagramBuilder
+from pydrake.systems.framework import System, DiagramBuilder, BasicVector
 from pydrake.systems.analysis import Simulator
 from pydrake.systems.primitives import ( 
     Linearize, 
@@ -36,15 +36,10 @@ class ClosedLoopPlanarQuadrotor():
         )
         
         # Next setup the setpoint system 
-        self.setpoint_vector = self.builder.AddNamedSystem("Setpoint Vector", ConstantVectorSource(np.zeros([6, 1]))) 
         self.setpoint_inverter = self.builder.AddNamedSystem("Inverter", Gain(-1, 6)) 
         self.setpoint_adder = self.builder.AddNamedSystem("Error Calc", Adder(2, 6)) 
         
         # Connect setpoint logic together
-        self.builder.Connect(
-            self.setpoint_vector.get_output_port(0), 
-            self.setpoint_inverter.get_input_port(0)
-        )
         self.builder.Connect(
             self.setpoint_inverter.get_output_port(0),
             self.setpoint_adder.get_input_port(1),
@@ -65,8 +60,8 @@ class ClosedLoopPlanarQuadrotor():
         # Also set up simulator here to be used later
         self.simulator = Simulator(self.diagram) 
         self.sim_context = self.simulator.get_mutable_context() 
-        self.setpoint_context = self.diagram.GetMutableSubsystemContext(
-            self.setpoint_vector, self.sim_context
+        self.inverter_context = self.diagram.GetMutableSubsystemContext(
+            self.setpoint_inverter, self.sim_context
         )
         self.plant_context = self.diagram.GetMutableSubsystemContext(
             self.plant, self.sim_context
@@ -77,6 +72,9 @@ class ClosedLoopPlanarQuadrotor():
         
         # For now, start at some random state
         self.sim_context.SetContinuousState(np.random.randn(6, 1))
+        
+        # Set up setpoint itself: 
+        self.setpoint_vector = self.setpoint_inverter.get_input_port(0).FixValue(self.inverter_context, np.array([1, 0, 0, 0, 0, 0]))
                
         # Establish data logging variables. 
         self.data_log = {"time": [], "state": [], "setpoint": [], "input": []}
@@ -85,18 +83,16 @@ class ClosedLoopPlanarQuadrotor():
         self.record_current_state()
 
         # Finally, print out all context information: 
-        print("ClosedLoopPlanarQuadrotor Instance") 
-        print(self.sim_context) 
-        print(f"Total Stats: {self.sim_context.num_total_states()}")
-        print(f"Current Mutable State: {self.sim_context.get_mutable_state()}")
-        print(f"Setpoint Mutable Context: {self.setpoint_context}")
-        print(f"Setpoint Mutable State: {self.setpoint_context.get_mutable_state()}")
+        # print("ClosedLoopPlanarQuadrotor Instance") 
+        # print(self.sim_context) 
+        # print(f"Total Stats: {self.sim_context.num_total_states()}")
+        # print(f"Current Mutable State: {self.sim_context.get_mutable_state()}")
         
 
     def record_current_state(self): 
         self.data_log["time"].append(self.time)
         self.data_log["state"].append(self.sim_context.get_continuous_state_vector().CopyToVector())
-        self.data_log["setpoint"].append(self.setpoint_vector.get_source_value(self.setpoint_context).CopyToVector())
+        self.data_log["setpoint"].append(self.setpoint_vector.GetMutableData().get_value().CopyToVector())
         self.data_log["input"].append(self.plant.get_input_port(0).Eval(self.plant_context))
         
     def get_data_log(self): 
@@ -105,11 +101,15 @@ class ClosedLoopPlanarQuadrotor():
                 self.data_log[key] = np.array(self.data_log[key])
         return self.data_log
         
-    def step(self, dt, setpoint_update = None): 
+        
+    def update_setpoint(self, new_setpoint): 
+        self.setpoint_vector.GetMutableData().set_value(new_setpoint)
+        
+    def step(self, dt, new_setpoint = None): 
         
         # Update the setpoint vector if applicable
-        if setpoint_update is not None:
-            self.setpoint_context.FixInputPort(0, setpoint_update)
+        if new_setpoint is not None: 
+            self.update_setpoint(new_setpoint)
         
         # Step the simulator forward 
         self.simulator.AdvanceTo(self.time + dt)
