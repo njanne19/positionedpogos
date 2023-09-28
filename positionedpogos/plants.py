@@ -1,17 +1,16 @@
 import math 
 import numpy as np 
-from pydrake.all import (
-    LinearQuadraticRegulator, 
+from pydrake.systems.framework import System, DiagramBuilder
+from pydrake.systems.analysis import Simulator
+from pydrake.systems.primitives import ( 
     Linearize, 
-    MultibodyPlant, 
-    System, 
-    DiagramBuilder, 
-    ConstantVectorSource, 
-    Gain, 
     Adder, 
-    Simulator
+    Gain, 
+    ConstantVectorSource
 )
-
+from pydrake.systems.controllers import (
+    LinearQuadraticRegulator
+)
 from underactuated.quadrotor2d import Quadrotor2D, Quadrotor2DVisualizer
 
 class ClosedLoopPlanarQuadrotor(): 
@@ -69,6 +68,9 @@ class ClosedLoopPlanarQuadrotor():
         self.setpoint_context = self.diagram.GetMutableSubsystemContext(
             self.setpoint_vector, self.sim_context
         )
+        self.plant_context = self.diagram.GetMutableSubsystemContext(
+            self.plant, self.sim_context
+        )
         
         # Establish time reference 
         self.time = 0.0 
@@ -77,7 +79,7 @@ class ClosedLoopPlanarQuadrotor():
         self.sim_context.SetContinuousState(np.random.randn(6, 1))
                
         # Establish data logging variables. 
-        self.data_log = {"time": [], "state": [], "setpoint": []}
+        self.data_log = {"time": [], "state": [], "setpoint": [], "input": []}
         
         # Put first values on stack 
         self.record_current_state()
@@ -95,6 +97,7 @@ class ClosedLoopPlanarQuadrotor():
         self.data_log["time"].append(self.time)
         self.data_log["state"].append(self.sim_context.get_continuous_state_vector().CopyToVector())
         self.data_log["setpoint"].append(self.setpoint_vector.get_source_value(self.setpoint_context).CopyToVector())
+        self.data_log["input"].append(self.plant.get_input_port(0).Eval(self.plant_context))
         
     def get_data_log(self): 
         for key in self.data_log.keys(): 

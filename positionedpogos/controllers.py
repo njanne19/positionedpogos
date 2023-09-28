@@ -1,11 +1,12 @@
 import math 
 import numpy as np 
-from pydrake.all import (
-    LinearQuadraticRegulator, 
-    Linearize, 
-    MultibodyPlant, 
-    System
+from pydrake.systems.framework import System
+from pydrake.multibody.plant import MultibodyPlant
+from pydrake.systems.primitives import Linearize
+from pydrake.systems.controllers import (
+    LinearQuadraticRegulator
 )
+from pydrake.all import System
 
 def QuadrotorLQR(plant: System): 
     
