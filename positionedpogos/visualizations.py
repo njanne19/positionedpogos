@@ -207,17 +207,9 @@ def visualize_sim(closed_loop_system):
     
     def flight_overview_init(): 
         return quadcopter_init() + six_dof_init()
-        # updated_artists = []
-        # updated_artists.extend(quadcopter_init())
-        # updated_artists.extend(six_dof_init())
-        # return tuple(updated_artists)
     
     def flight_overview_update(frame):
         return quadcopter_update(frame) + six_dof_update(frame)
-        # updated_artists = []
-        # updated_artists.extend(quadcopter_update(frame))
-        # updated_artists.extend(six_dof_update(frame))
-        # return tuple(updated_artists)
     
     ani = FuncAnimation(
         flight_overview, 
