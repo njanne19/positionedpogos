@@ -5,6 +5,10 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import pickle 
 from copy import deepcopy 
+from datetime import datetime
+from tensorboardX import SummaryWriter
+import io 
+from PIL import Image 
 
 def get_n_section_color(idx, N):
     """
@@ -129,6 +133,16 @@ def calculate_current_loss(goal_position, goal_pitch, state_at_crossing):
 
 
 def main(): 
+    
+    # Create a datetime string
+    current_time = datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    # Append the datetime string to the folder name
+    log_dir = f'runs/optimization_experiment_{current_time}'
+
+    # Initialize the SummaryWriter with the new log directory
+    writer = SummaryWriter(log_dir)
+    
     # Define the origin of the simulation 
     origin = np.array([-2, 1, 6, 0, 0, 0]) 
     
@@ -143,8 +157,8 @@ def main():
     # Then we need to begin optimization 
     # Start by picking a step size for both the jacobian 
     # and the optimizer
-    jacobian_step_size = 0.001
-    optimizer_step_size = 0.01
+    jacobian_step_size = 0.0001
+    optimizer_step_size = 0.0001
     
     # Then we need to define the threshold for the y position 
     y_thresh = 1.5
@@ -169,6 +183,7 @@ def main():
         # First calculate the current loss for this iteration 
         state_at_crossing, total_data_log = execute_single_trial(origin, current_point, y_thresh)
         current_loss, position_loss, pitch_loss = calculate_current_loss(goal_position, goal_pitch, state_at_crossing) 
+        error_vector = np.array([position_loss, pitch_loss]).T 
         
         # Also add current_loss to losses 
         losses.append(current_loss)
@@ -182,8 +197,56 @@ def main():
         jacobian_inverse = np.linalg.inv(jacobian)
         
         # Then update the current point 
-        current_point[0] -= jacobian_inverse[0, 0] * optimizer_step_size + jacobian_inverse[0, 1] * optimizer_step_size
-        current_point[1] -= jacobian_inverse[1, 0] * optimizer_step_size + jacobian_inverse[1, 1] * optimizer_step_size
+        # Create a point vector, which is a 2D representation of the current point 
+        # The first row is the x position of the waypoint, the second row is y position of the waypoint
+        current_point_vector = np.array([current_point[0], current_point[1]]).T
+        
+        # Then create a new vector which we will use to replace current_point 
+        current_point_vector = current_point_vector + optimizer_step_size * (jacobian_inverse @ error_vector)
+        
+        # Then we use this vector to update the current waypoint
+        current_point[0:2] = current_point_vector.T
+        
+        # Log data to the writer 
+        writer.add_scalar('Total Loss', current_loss, num_iterations) 
+        writer.add_scalar('Position Loss', position_loss, num_iterations)
+        writer.add_scalar('Pitch Loss', pitch_loss, num_iterations)
+        
+        # Also add 2 views of the current point to see where it goes in the map 
+        writer.add_scalar('Current Point X', current_point[0], num_iterations)
+        writer.add_scalar('Current Point Y', current_point[1], num_iterations)
+        
+        # Create a scatter plot for X and Y 
+        plt.figure() 
+        plt.scatter(current_point[0], current_point[1], color='r')
+        plt.grid() 
+        plt.xlabel("X Position of Waypoint") 
+        plt.ylabel("Y Position of Waypoint") 
+        plt.xlim([-3, 4]) 
+        plt.ylim([-3.5, 1.5])
+        
+        # Convert to image 
+        buf = io.BytesIO() 
+        plt.savefig(buf, format='png') 
+        buf.seek(0) 
+        image = Image.open(buf)
+        image = np.array(image) 
+        
+        # Remove alpha channel 
+        if image.shape[-1] == 4: 
+            image = image[:, :, :3]
+            
+        # Add batch dimension 
+        # image = np.expand_dims(image, axis=0) 
+        image = np.transpose(image, (2, 0, 1))
+            
+        # Print image shape before adding to write r
+        print(f"Image shape: {image.shape}")
+            
+        # Add image to writeer
+        writer.add_image('Current Waypoint Position', image, num_iterations)
+        
+        writer.flush() # Push data to the dashboard 
         
         # Print out current statistics 
         print(f"TRIAL {num_iterations}, LOSS: {current_loss}, POSITION LOSS: {position_loss}, PITCH LOSS: {pitch_loss}, CURRENT POINT: {current_point}, JACOBIAN_DET:{np.linalg.det(jacobian)}")
