@@ -45,7 +45,7 @@ class ClosedLoopPlanarQuadrotor():
         self.builder.Connect(
             self.plant.get_output_port(0),
             self.setpoint_adder.get_input_port(0)
-        )      
+        )
         self.builder.Connect(
             self.setpoint_adder.get_output_port(0),
             self.controller.get_input_port(0)  
@@ -81,7 +81,7 @@ class ClosedLoopPlanarQuadrotor():
         )
         self.error_context = self.diagram.GetMutableSubsystemContext(
             self.setpoint_adder, self.sim_context
-        ) 
+        )
         
         # Establish time reference 
         self.time = 0.0 
