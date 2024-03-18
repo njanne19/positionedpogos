@@ -30,11 +30,11 @@ def get_n_section_color(idx, N):
     return color
 
 
-def execute_single_trial(origin, target, thresh): 
+def execute_single_trial(origin, target, thresh, saturation=True): 
     
     # We have the origin and the starting point, now 
     # we just need to run the simulation 
-    clpqr = ClosedLoopPlanarQuadrotor(QuadrotorLQR, initial_state=origin, initial_setpoint=target)
+    clpqr = ClosedLoopPlanarQuadrotor(QuadrotorLQR, initial_state=origin, initial_setpoint=target, saturation=saturation)
     
     # Then conduct the simulation 
     total_time = 5.0 

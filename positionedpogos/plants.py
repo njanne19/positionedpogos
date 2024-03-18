@@ -16,7 +16,7 @@ from underactuated.quadrotor2d import Quadrotor2D, Quadrotor2DVisualizer
 
 class ClosedLoopPlanarQuadrotor(): 
     
-    def __init__(self, controller_constructor: System, initial_state = None, initial_setpoint = None): 
+    def __init__(self, controller_constructor: System, initial_state = None, initial_setpoint = None, saturation=True): 
         
         # We want a larger "system" object 
         # we can accomplish this by importing our plant
@@ -51,17 +51,24 @@ class ClosedLoopPlanarQuadrotor():
             self.controller.get_input_port(0)  
         )
         
-        # Saturate output of controller 
-        self.builder.Connect(
-            self.controller.get_output_port(0),
-            self.saturation.get_input_port(0)
-        )
-        
-        # Then connect the output of the saturation and connect it to the input of the plant 
-        self.builder.Connect(
-            self.saturation.get_output_port(0), 
-            self.plant.get_input_port(0)
-        )
+        if saturation: 
+            # Saturate output of controller 
+            self.builder.Connect(
+                self.controller.get_output_port(0),
+                self.saturation.get_input_port(0)
+            )
+            
+            # Then connect the output of the saturation and connect it to the input of the plant 
+            self.builder.Connect(
+                self.saturation.get_output_port(0), 
+                self.plant.get_input_port(0)
+            )
+        else: 
+            # If we don't want saturation, just connect the output of the controller to the input of the plant 
+            self.builder.Connect(
+                self.controller.get_output_port(0),
+                self.plant.get_input_port(0)
+            )
         
         # Then build the diagram after everything is fully configured. 
         self.diagram = self.builder.Build() 

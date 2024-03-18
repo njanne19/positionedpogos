@@ -1,10 +1,169 @@
 import matplotlib.pyplot as plt 
 from matplotlib.animation import FuncAnimation
 import numpy as np 
+from scipy.spatial import ConvexHull
 
-def visualize_sim(closed_loop_system): 
+def visualize_single_trial(closed_loop_system, **kwargs): 
+    
+    # Get the data log from the sim
+    data_log = closed_loop_system.get_data_log()
+    time = data_log["time"]
+    state = data_log["state"]
+    setpoint_vector = data_log["setpoint"]
+    thrust = data_log["input"]
+    
+    # Get virtual floor states 
+    has_crossed_threshold = data_log["has_crossed_threshold"]
+    state_at_crossing = data_log["state_at_crossing"]
+    time_at_crossing = data_log["time_at_crossing"]
+    y_crossing = data_log["y_crossing"]
+    
+    # Create a figure to visualize the simulation
+    fig, ax = plt.subplots()
+    
+    # Plot the quadrotor's trajectory 
+    ax.plot(state[:, 0], state[:, 1], label="Quadrotor Trajectory")
+    
+    # Turn on grid, make axes equal
+    ax.grid()
+    ax.set_aspect('equal')
+    
+    # Add title and labels
+    if kwargs.get("trial_id") is not None: 
+        ax.set_title(f"Quadrotor Trajectory (Trial {kwargs.get('trial_id')})")
+    else: 
+        ax.set_title("Quadrotor Trajectory")
+    ax.set_xlabel("X Position (m)")
+    ax.set_ylabel("Y Position (m)")
+    
+    # Plot the virtual floor
+    ax.axhline(y_crossing, color='r', linestyle='--', label="Virtual Floor")
+    
+    # Plot the setpoint
+    ax.scatter(setpoint_vector[:, 0], setpoint_vector[:, 1], label="Setpoint", c='g')
+    
+    # Draw a drone at the virtual floor with the pitch angle corresponding to the state at crossing
+    if has_crossed_threshold:
+        ax.scatter(state_at_crossing[0], state_at_crossing[1], label="State at Crossing", c='k')
+        ax.quiver(
+            state_at_crossing[0], 
+            state_at_crossing[1], 
+            0.5*np.cos(state_at_crossing[2]), 
+            0.5*np.sin(state_at_crossing[2]), 
+            scale=5, 
+            label="BodyX @Cross",
+            color='red'
+        )
+        # Draw body y axis as well
+        ax.quiver(
+            state_at_crossing[0], 
+            state_at_crossing[1], 
+            0.5*np.cos(state_at_crossing[2] + np.pi/2), 
+            0.5*np.sin(state_at_crossing[2] + np.pi/2), 
+            scale=5, 
+            label="BodyY @Cross", 
+            color='green'
+        )
+        
+   
+    # Plot the initial state
+    ax.scatter(state[0, 0], state[0, 1], label="Initial State", c='b')
+    ax.legend() 
+    
+    # Make a second plot that shows timeseries components of x/y/theta of the drone
+    fig2, ax2 = plt.subplots(3, 1, figsize=(10, 8), tight_layout=True)
+    ax2[0].plot(time, state[:, 0], label="X Position")
+    ax2[0].plot(time, setpoint_vector[:, 0], label="X Setpoint", color='r', linestyle='--')
+    ax2[0].set_title("X Position and Setpoint")
+    ax2[0].set_xlabel("Time (s)")
+    ax2[0].set_ylabel("X Position (m)")
+    # Annotate where crossing point occurs 
+    if has_crossed_threshold:
+        ax2[0].axvline(time_at_crossing, color='k', label="Crossing Time")
+        ax2[0].scatter(time_at_crossing, state_at_crossing[0], label="Crossing Point", c='k')
+    ax2[0].legend()
+    ax2[0].grid()
+    
+    # Y position
+    ax2[1].plot(time, state[:, 1], label="Y Position")
+    ax2[1].plot(time, setpoint_vector[:, 1], label="Y Setpoint", color='g', linestyle='--')
+    ax2[1].set_title("Y Position and Setpoint")
+    ax2[1].set_xlabel("Time (s)")
+    ax2[1].set_ylabel("Y Position (m)")
+    # Annotate where crossing point occurs
+    if has_crossed_threshold:
+        ax2[1].axvline(time_at_crossing, color='k', label="Crossing Time")
+        ax2[1].scatter(time_at_crossing, state_at_crossing[1], label="Crossing Point", c='k')
+    ax2[1].legend()
+    ax2[1].grid()
+    
+    # Theta position
+    if kwargs.get("use_rad") is not None: 
+        ax2[2].plot(time, state[:, 2], label="Theta Position")
+        ax2[2].plot(time, setpoint_vector[:, 2], label="Theta Setpoint", color='b', linestyle='--')
+        ax2[2].set_title("Theta Position and Setpoint")
+        ax2[2].set_xlabel("Time (s)")
+        ax2[2].set_ylabel("Theta Position (rad)")
+    else:
+        ax2[2].plot(time, np.degrees(state[:, 2]), label="Theta Position")
+        ax2[2].plot(time, np.degrees(setpoint_vector[:, 2]), label="Theta Setpoint", color='b', linestyle='--')
+        ax2[2].set_title("Theta Position and Setpoint")
+        ax2[2].set_xlabel("Time (s)")
+        ax2[2].set_ylabel("Theta Position (deg)")
+    
+    # Annotate where crossing point occurs
+    if has_crossed_threshold:
+        ax2[2].axvline(time_at_crossing, color='k', label="Crossing Time")
+        if kwargs.get("use_rad") is not None: 
+            ax2[2].scatter(time_at_crossing, state_at_crossing[2], label="Crossing Point", c='k')
+        else:
+            ax2[2].scatter(time_at_crossing, np.degrees(state_at_crossing[2]), label="Crossing Point", c='k')
+    ax2[2].legend()
+    ax2[2].grid()
+    
+    
+def visualize_search_space_points(targets, **kwargs): 
+    
+    # Start by plotting all target points in the search space, use
+    # equal axis and add a grid, draw a boundary curve around all of them.
+    
+    fig, ax = plt.subplots()
+    ax.scatter(targets[:, 0], targets[:, 1], label="Waypoints", c='b', s=5)
+    ax.set_title("Search Space Waypoints")
+    ax.set_xlabel("X Position (m)")
+    ax.set_ylabel("Y Position (m)")
+    ax.grid()
+    
+    if kwargs.get("xlim") is not None:
+        ax.set_xlim(kwargs.get("xlim"))
+    else:
+        ax.set_xlim([-1.5, 4.5])
+    if kwargs.get("ylim") is not None:
+        ax.set_ylim(kwargs.get("ylim"))
+    else: 
+        ax.set_ylim([-3.5, 2.5])
+    
+    ax.set_aspect('equal')
+    
+    # Draw a smoothed version of the convex hull around the points 
+    hull = ConvexHull(targets)
+    
+    for simplex in hull.simplices:
+        ax.plot(targets[simplex, 0], targets[simplex, 1], 'r-')
+        
+    # Also draw the centroid of the hull
+    centroid = np.mean(targets[hull.vertices], axis=0)
+    ax.scatter(centroid[0], centroid[1], label="Centroid", c='r')
+    ax.legend()
+    
+    
+    
+    
+
+def visualize_all_sim_states(closed_loop_system): 
 
     # Get data log from sim
+    print(closed_loop_system) 
     data_log = closed_loop_system.get_data_log()
     time = data_log["time"]
     state = data_log["state"]
@@ -223,6 +382,7 @@ def visualize_sim(closed_loop_system):
         
     if is_running_in_notebook(): 
         from IPython.display import HTML, display 
+        print("Running in notebook")
         display(flight_overview) 
         display(HTML(ani.to_jshtml()))
         plt.close(six_dof_save_figure) 
